@@ -86,7 +86,9 @@ printf 'collector exit: %s\n' "$collector_status"
 
 ## Testing and extension
 
-Run Bash syntax checking and `python3 -m unittest discover -s tests -v`. Tests use fake commands and temporary roots so they do not scan registries, install packages, or contact Docker. They verify error semantics and option behavior, not production security or restore readiness. A live inventory smoke test only establishes the collector runs on that environment.
+Run `bash scripts/check.sh` with Bash, Python 3, Git, and ShellCheck installed. It checks shell syntax/lint, isolated unit tests, local inline Markdown paths/anchors, and whitespace. External URLs and reference-style links are outside the link checker's coverage. The [Quality workflow](../.github/workflows/quality.yml) runs the same entry point on Ubuntu 22.04 and 24.04 with read-only repository permissions and no production credentials.
+
+Tests use fake commands and temporary roots so they do not scan registries, install packages, or contact Docker. They verify error semantics and option behavior, not production security or restore readiness. A live inventory smoke test only establishes the collector runs on that environment. See [support boundaries](SUPPORT.md), the [threat model](THREAT_MODEL.md), and [risk management](RISK_MANAGEMENT.md) for the review and deployment evidence that automated checks cannot supply.
 
 Extend other package managers/scanners with explicit opt-in side effects, structured result parsing, clear scope labels, exit status preservation, and failure cases. Never convert unavailable evidence into a “0 vulnerabilities” result.
 

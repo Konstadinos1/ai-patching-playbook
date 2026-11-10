@@ -36,7 +36,7 @@ For each finding record exact installed version and source, advisory/scanner ref
 
 A pending apt update is not automatically a CVE; outdated Python packages are not automatically vulnerable; image age is not a vulnerability scan. Cross-reference verified CVEs against [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog). KEV indicates known exploitation, not that this deployment is affected. Record failed lookups as unknown.
 
-Prioritize applicable exploitation, exposure, impact, and recoverability. Select one layer or justify a coupled batch. There is no universal “apps before OS” ordering: an exploited host flaw may take precedence over an application dependency warning.
+Prioritize applicable exploitation, exposure, impact, and recoverability using [the triage framework](docs/RISK_MANAGEMENT.md). Select one layer or justify a coupled batch. There is no universal “apps before OS” ordering: an exploited host flaw may take precedence over an application dependency warning.
 
 Record apt metadata freshness. The audit does not run `apt-get update`; a clean simulation against stale indexes is incomplete evidence. Metadata refresh is an authorized network and filesystem operation.
 
@@ -81,7 +81,7 @@ Use the observation period and thresholds agreed before execution. A quick web r
 
 Complete [the report](templates/CHANGE_REPORT.md). Distinguish installed, activated, health-verified, and security-verified changes. Mark unrun tests and failed scans explicitly. Record measured downtime and remaining uncertainty.
 
-Deferred items need an owner, deadline, exposure, and compensating control. Keep evidence access-controlled with a retention policy. A scheduled inventory job does not authorize unattended production patching.
+Deferred items need an owner, deadline, exposure, and compensating control. Use a [time-limited exception](templates/RISK_EXCEPTION.md) when the owner accepts residual exposure; record expiry and reassessment triggers. Keep evidence access-controlled with a retention policy. A scheduled inventory job does not authorize unattended production patching.
 
 ## Lifecycle and stop paths
 

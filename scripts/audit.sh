@@ -131,7 +131,12 @@ try:
     result = json.load(sys.stdin)
     if status not in (0, 1) or not isinstance(result, dict) or "error" in result:
         raise ValueError("command or registry error")
-    counts = result["metadata"]["vulnerabilities"]
+    metadata = result.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ValueError("missing or invalid metadata")
+    counts = metadata.get("vulnerabilities")
+    if not isinstance(counts, dict):
+        raise ValueError("missing or invalid severity mapping")
     keys = ("info", "low", "moderate", "high", "critical", "total")
     if not all(type(counts.get(k)) is int and counts[k] >= 0 for k in keys):
         raise ValueError("missing or invalid severity counts")

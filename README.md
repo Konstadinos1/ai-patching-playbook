@@ -28,11 +28,15 @@ bash scripts/audit.sh --app-root /srv/api --network-scans
 | [HOWTO](HOWTO.md) | Lifecycle, roles, gates, and completion criteria |
 | [Workflow runbooks](docs/WORKFLOWS.md) | OS, reboots, Compose, Node, Python, emergencies, recurring reviews |
 | [Technical breakdown](docs/TECHNICAL.md) | Trust boundaries, scanner semantics, audit behavior and limits |
+| [Threat model](docs/THREAT_MODEL.md) | Concrete abuse/failure cases, controls, and remaining limits |
+| [Risk management](docs/RISK_MANAGEMENT.md) | Prioritization, time-limited exceptions, reassessment, and closure |
 | [Recovery and verification](docs/RECOVERY.md) | Backups, health contracts, abort decisions, incident handoff |
 | [Worked example](docs/EXAMPLE.md) | A fictional change from finding to closure |
 | [Agent prompt](PROMPT.md) | Instructions for advise and execute modes |
 | [Change plan](templates/CHANGE_PLAN.md) | Evidence, commands, approval, and recovery prerequisites |
 | [Change report](templates/CHANGE_REPORT.md) | Before/after evidence, observed health, and deferred work |
+| [Risk exception](templates/RISK_EXCEPTION.md) | Owner-approved deferral with controls, expiry, and review triggers |
+| [Support and releases](docs/SUPPORT.md) | Intended versus tested environments and release verification |
 
 ## Operating modes
 
@@ -44,13 +48,15 @@ Prioritize verified exploitation, exposure, and workload impact. Use a workload 
 
 ## Validation
 
-When changing workflows, keep the prompt and templates consistent. When changing the script, run:
+Pull requests run the [Quality workflow](.github/workflows/quality.yml) on Ubuntu 22.04 and 24.04: Bash syntax, ShellCheck, isolated behavior tests, offline documentation-link checks, and whitespace validation. These checks validate the repository; they do not patch or certify a production host.
+
+Run the same checks locally with Bash, Python 3, Git, and ShellCheck installed:
 
 ```bash
-bash -n scripts/audit.sh
-python3 -m unittest discover -s tests -v
-git diff --check
+bash scripts/check.sh
 ```
+
+The link checker covers inline local paths and Markdown anchors, not external URLs or reference-style links. See [CONTRIBUTING.md](CONTRIBUTING.md) for review requirements and [SECURITY.md](SECURITY.md) for sensitive reports. Agent development instructions live in [AGENTS.md](AGENTS.md).
 
 ## License
 
