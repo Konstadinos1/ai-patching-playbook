@@ -81,6 +81,48 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn('UNKNOWN: npm audit', result.stdout)
 
+    def test_wrong_json_container_types_are_explicitly_unknown(self):
+        for value in ([], '', 1, None, True):
+            for result_json in ({'metadata': value},
+                                {'metadata': {'vulnerabilities': value}}):
+                with self.subTest(result_json=result_json):
+                    self.env['AUDIT_JSON'] = json.dumps(result_json)
+                    result = self.run_audit('--app-root', str(self.app), '--network-scans')
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn('UNKNOWN: npm audit result unusable', result.stdout)
+                    self.assertNotIn('Traceback', result.stdout + result.stderr)
+
+    def test_bad_severity_values_are_unknown(self):
+        for value in (-1, True, '0', 0.5, None):
+            with self.subTest(value=value):
+                output = json.loads(report())
+                output['metadata']['vulnerabilities']['high'] = value
+                self.env['AUDIT_JSON'] = json.dumps(output)
+                result = self.run_audit('--app-root', str(self.app), '--network-scans')
+                self.assertEqual(result.returncode, 1)
+                self.assertIn('UNKNOWN: npm audit result unusable', result.stdout)
+
+    def test_docker_access_failure_is_unknown(self):
+        self.stub('docker', 'echo "permission denied" >&2\nexit 1\n')
+        result = self.run_audit()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('UNKNOWN: command failed (exit 1): docker', result.stdout)
+
+    def test_apt_simulation_runs_once(self):
+        self.stub('apt-get', 'echo called >> "$APT_CALLS"\necho "Inst example [1] (2 local)"\n')
+        self.env['APT_CALLS'] = str(self.root / 'apt-calls')
+        result = self.run_audit()
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual((self.root / 'apt-calls').read_text().splitlines(), ['called'])
+        self.assertIn('Simulated package installations: 1', result.stdout)
+
+    def test_later_success_does_not_hide_failed_root(self):
+        result = self.run_audit('--app-root', str(self.root / 'missing'),
+                                '--app-root', str(self.app), '--network-scans')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('SCANNED: npm runtime', result.stdout)
+        self.assertIn('INCOMPLETE:', result.stdout)
+
     def test_inconsistent_counts_or_success_status_are_unknown(self):
         for output in (report(1), report().replace('"total": 0', '"total": 3')):
             with self.subTest(output=output):
