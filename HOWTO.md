@@ -1,175 +1,104 @@
-# HOWTO — Patching a webserver with an AI agent, end to end
+# HOWTO — the complete patching lifecycle
 
-This is the complete process. It assumes a Linux server (Ubuntu/Debian
-examples) running Docker containers and/or Node apps — the most common
-self-hosted shape. Adapt commands for other distros.
+Use this procedure with the relevant [layer runbook](docs/WORKFLOWS.md). Commands are examples to adapt to a confirmed target, not a script to paste blindly into production.
 
----
+## 1. Intake and ownership
 
-## 0. What an agent can and cannot do
+Name the operator, service owner, approver, and recovery operator. One person can hold several roles, but record this. The agent assists; the service owner accepts workload risk.
 
-| | ChatGPT (web, no tools) | Tool-using agent (Claude Code, Codex, Hermes) |
-|---|---|---|
-| Read your audit output | ✅ | ✅ |
-| Explain CVEs, prioritize | ✅ | ✅ |
-| Write exact patch commands | ✅ | ✅ |
-| Run the commands | ❌ you do | ✅ (with approval gates) |
-| Verify services after | ❌ you do | ✅ |
-| Break production if unsupervised | ❌ (can't touch it) | ⚠️ **yes — hence this playbook** |
+Record target hostname/cloud ID, production or staging, OS release/architecture, topology, public exposure, application roots, dependencies, and a maintenance window with timezone. Identify whether the agent, SSH connection, monitoring, or backups depend on the target being restarted. Confirm out-of-band access before touching that dependency.
 
-The agent is the junior engineer with infinite patience. You are the
-approving senior. The process below enforces that relationship.
+Fill [the plan template](templates/CHANGE_PLAN.md). Define allowed layers and explicit exclusions. Database migrations, firewall changes, package cleanup, and configuration refactors are separate scope unless required and approved.
 
----
-
-## 1. The six phases (what the agent will walk through)
-
-```
-0 DISCOVER ─► 1 ASSESS ─► 2 PLAN ─► 🛑 YOUR APPROVAL ─► 3 BACKUP ─► 4 PATCH ─► 5 VERIFY ─► 6 REPORT
-   read-only    read-only    read-only      no mutations
-                             (a table)       before this point   one layer     health      evidence
-                                                              per window     checks
-```
-
-**Why the stop gate matters:** an agent that patches + restarts + reboots in
-one autonomous run will eventually take down production at 3 AM. The gate is
-cheap; an outage is not.
-
----
-
-## 2. Step-by-step
-
-### Step 1 — Snapshot the audit (5 min)
-
-On the server:
+## 2. Discover and establish baseline
 
 ```bash
-bash audit.sh > audit-$(date +%F).txt 2>&1
+bash scripts/audit.sh
 ```
 
-The script is **read-only**: simulated upgrades, listening ports, container
-ages, npm audits, disk space. Nothing installed, nothing restarted.
+The default audit performs local inspection. It does not refresh package indexes, scan every application, or establish vulnerability absence. Missing tools, access errors, and unsupported systems require follow-up.
 
-If you prefer the agent to do it (execute mode), it runs the same script
-itself — still read-only.
-
-### Step 2 — Brief the agent
-
-Open ChatGPT (advise) or your terminal agent (execute). Paste:
-
-1. The whole of `PROMPT.md`
-2. Your first message with the filled template (TARGET, MODE, window,
-   constraints)
-3. The audit output
-
-### Step 3 — Read the plan, not the confidence
-
-The agent returns a table like:
-
-| Finding | Layer | Fix | Restart? | Risk if patched | Risk if not | Rollback |
-|---|---|---|---|---|---|---|
-| openssl 3.0.2 (KEV-2026-XXXX) | OS | apt upgrade openssl | nginx restart (~2s) | low — staged rollout | active exploitation | apt install openssl=3.0.2-0ubuntu1 |
-| lodash <4.17.21 | app | npm audit fix | no | low | DoS vector | git checkout package-lock.json |
-
-Check before approving:
-
-- [ ] Every CVE comes from **your audit output** (no invented CVEs — ask
-  "which line of the audit shows this?" if unsure)
-- [ ] Restarts are listed with expected downtime
-- [ ] Rollback exists per item, or risk is explicitly accepted
-- [ ] Layers aren't mixed (app deps ≠ OS packages ≠ release upgrade)
-- [ ] Nothing touches things you didn't list in scope
-
-### Step 4 — Approve, and let it patch one layer at a time
-
-Safest order (each layer = its own maintenance window):
-
-1. **App dependencies** (`npm audit fix`) — app restart only, instant rollback via lockfile
-2. **App runtime minor bumps** — `node 22.1 → 22.9`, not `22 → 24`
-3. **OS package upgrades** — `apt upgrade`, restart only flagged services
-4. **Containers** — pull new images, recreate **one at a time**, health check between each
-5. **OS release upgrade** (`22.04 → 24.04`) — only with a full snapshot and a real window
-
-### Step 5 — Verify like a skeptic
-
-After each layer, the agent (or you) runs:
+Use explicit application roots. Optional npm scanning requires permission to contact the configured registry and possibly write npm logs/caches:
 
 ```bash
-# the service actually answers
-curl -fsS -o /dev/null -w '%{http_code}\n' https://your-site.example/   # want 200/301
-ss -tln | grep -E ':(80|443)\b'                                          # ports alive
-
-# system level
-systemctl --failed                    # want: 0 listed
-docker ps --format '{{.Names}} {{.Status}}'   # want: healthy/up, not restarting
-
-# one real functional request (log in, submit a form, hit the API)
+bash scripts/audit.sh --app-root /srv/api --network-scans
 ```
 
-Then re-run the audit — the patched layer's count should drop. Show the
-before/after numbers in the report.
+Review and redact hostnames, addresses, image names, dependency data, and paths before sharing. Never paste `.env`, credentials, full container inspection, raw Compose configuration, or unrestricted journals into chat.
 
-### Step 6 — Keep the evidence
+Capture the [health contract](docs/RECOVERY.md): public and origin health, expected status/content, a critical functional request, dependency checks, and latency/error/resource baseline. Record pre-existing failed units and alerts. Resolve unexplained baseline failures before routine patching or document explicitly accepted degradation.
 
-The final report (agent produces it, you archive it) contains:
-what changed (versions before → after), what restarted + observed downtime,
-verification output, remaining findings with reasons, and anything deferred
-to `LATER.md`. This is your audit trail for insurance, clients, and
-future-you.
+For redundant deployments, verify capacity, draining, routing, session/shared-state behavior, and version compatibility before claiming a rolling update avoids downtime. A single server may require interruption.
 
----
+## 3. Assess applicability and prioritize
 
-## 3. Rollback cheat sheet
+For each finding record exact installed version and source, advisory/scanner reference, timestamp, scanner database freshness, affected range, fixed version, exposure, and applicability. Distribution backports mean upstream version comparison alone is insufficient.
 
-| Layer | Rollback |
-|---|---|
-| npm deps | `git checkout package-lock.json && npm ci && restart app` |
-| apt package | `apt install <pkg>=<old-version>` (find with `apt policy <pkg>`) |
-| container | retag previous image `docker tag <old-sha> img:latest && docker compose up -d` |
-| config file | restore from the `.bak-$(date +%F)` copy made in Phase 3 |
-| whole box | cloud snapshot restore (only if you actually took one — Phase 3 asks) |
+A pending apt update is not automatically a CVE; outdated Python packages are not automatically vulnerable; image age is not a vulnerability scan. Cross-reference verified CVEs against [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog). KEV indicates known exploitation, not that this deployment is affected. Record failed lookups as unknown.
 
----
+Prioritize applicable exploitation, exposure, impact, and recoverability. Select one layer or justify a coupled batch. There is no universal “apps before OS” ordering: an exploited host flaw may take precedence over an application dependency warning.
 
-## 4. Traps this playbook exists to prevent
+Record apt metadata freshness. The audit does not run `apt-get update`; a clean simulation against stale indexes is incomplete evidence. Metadata refresh is an authorized network and filesystem operation.
 
-1. **The restart kills the box, not the patch.** A patched-but-unrestarted
-   server is still vulnerable but *stable*; a restarted server with a broken
-   unit file is *down*. That's why restarts get their own gate.
-2. **Invented CVEs.** LLMs confidently cite CVEs that don't exist or don't
-   apply. Rule: every finding must trace to a line in real scanner output.
-3. **Silence ≠ health.** Empty logs on a dead service. Always hit the endpoint.
-4. **Downtime fakes your metrics.** After a reboot, "incidents per 24h"
-   numbers are window-truncated. Note boot time before interpreting graphs.
-5. **The agent patches itself out of existence.** If the agent runs *on* the
-   server it's patching (Hermes/Claude Code on the same box), upgrading its
-   own runtime or restarting its host kills it mid-task. Its own stack is
-   out of scope; a human does those.
-6. **do-release-upgrade casually.** Never inside a tool-using agent. Ever.
-7. **`apt dist-upgrade` ≠ `apt upgrade`.** The first removes/packages-swaps;
-   default to the second unless the plan says otherwise.
-8. **Unattended-upgrades double-patching.** If it's enabled, the agent's
-   manual `apt upgrade` races it. Check `systemctl status unattended-upgrades` first and coordinate.
+## 4. Plan and approve
 
----
+Every change item must specify:
 
-## 5. Scheduling (once the manual run works)
+- Target, exact from/to version or artifact, and supporting finding.
+- Commands, expected file/data effects, downloads, automatic restarts, and explicit restarts/reboots.
+- Interruption estimate, health checks, observation interval, and abort thresholds.
+- Backup/restore prerequisites, old artifact availability, rollback commands, recovery duration, and owner.
 
-Cron the audit weekly; patch monthly. Example root crontab:
+Approval identifies the plan revision, hosts, layer, window, maximum interruption, and allowed recovery action. It covers commands already listed; repeated approval for those same actions is unnecessary. Changed targets, unexpected removals, migrations, new services, or expanded downtime require an updated plan and approval.
 
-```cron
-# Monday 06:10 — read-only posture snapshot, appended to a log
-10 6 * * 1  bash /opt/ai-patching-playbook/scripts/audit.sh >> /var/log/audit-weekly.log 2>&1
+Package maintainer scripts can restart services during installation. A gate before a later `systemctl restart` does not prevent this. Understand the distribution's behavior before starting; if the window forbids interruption and effects cannot be controlled, defer the installation.
+
+## 5. Prepare recovery
+
+Confirm working console/cloud access, retained old artifacts, available old package versions where relevant, configuration ownership/permissions, and disk/inode space. Coordinate unattended upgrades and other operators. Never delete package lock files or kill a transaction to get around contention.
+
+Use application-consistent state backups. Snapshots may be crash-consistent or omit attached volumes. Confirm restore procedure, evidence of a restore rehearsal, recovery time (RTO), and accepted loss of writes (RPO). A copy that has never been restored is weak recovery evidence.
+
+If recovery is unavailable or untested, stop routine execution. An owner-approved exception must identify affected items, downtime/data-loss exposure, and recovery limitations. “A backup probably exists” is insufficient.
+
+## 6. Apply a bounded batch
+
+Follow the [selected workflow](docs/WORKFLOWS.md). Capture UTC start/end, command, exit status, relevant redacted output, and artifact identity. In a redundant service, patch a canary, validate and observe it, then continue one instance at a time.
+
+Stop on unexpected scope, transaction failure, storage pressure, lost access, invalid prerequisites, or health regression. Preserve evidence and use the planned recovery decision. Do not chain speculative fixes outside approval.
+
+## 7. Verify and observe
+
+Check installed artifact identity and running process identity, public endpoint and response content, critical functional flow, dependencies, error/latency behavior, and queued/scheduled work. Compare failed units with baseline rather than treating old failures as new regressions.
+
+Check for processes using replaced libraries and pending reboot requirements with distribution-appropriate tools. Installation can succeed while vulnerable code remains active.
+
+Repeat the applicable scanner with comparable scope. Advisory databases can change between scans, so a finding count need not decrease even when the targeted fix works. Report each targeted finding's disposition and scanner coverage/freshness.
+
+Use the observation period and thresholds agreed before execution. A quick web request misses delayed jobs, rare traffic, and scheduled workers. Reboots truncate rate counters and monitoring windows; do not mistake gaps for improvement.
+
+## 8. Close or hand off
+
+Complete [the report](templates/CHANGE_REPORT.md). Distinguish installed, activated, health-verified, and security-verified changes. Mark unrun tests and failed scans explicitly. Record measured downtime and remaining uncertainty.
+
+Deferred items need an owner, deadline, exposure, and compensating control. Keep evidence access-controlled with a retention policy. A scheduled inventory job does not authorize unattended production patching.
+
+## Lifecycle and stop paths
+
+```mermaid
+flowchart TD
+  A[Intake and target confirmation] --> B[Discovery and workload baseline]
+  B --> C[Assess applicability and exposure]
+  C --> D[Plan exact batch and recovery]
+  D --> E{Scope approved?}
+  E -- No --> D
+  E -- Yes --> F[Prepare and verify recovery]
+  F --> G{Prerequisites met?}
+  G -- No --> D
+  G -- Yes --> H[Patch one batch]
+  H --> I{Identity and health pass?}
+  I -- Yes --> J[Observe and rescan]
+  J --> K[Report and close or defer]
+  I -- No --> L[Stop rollout and execute recovery decision]
+  L --> M[Verify recovery and hand off incident]
 ```
-
-Give the log to the agent once a month with MODE: advise, review the diff
-with the previous month, and run execute-mode windows only for the delta.
-
----
-
-## 6. What this playbook deliberately does NOT cover
-
-- Firewall hardening, fail2ban, SSH key rotation → `LATER.md`, separate change
-- Web Application Firewalls / Cloudflare config
-- Database engine major-version upgrades (their own runbook)
-- Compliance frameworks (use the evidence pack as *input*, not proof)
