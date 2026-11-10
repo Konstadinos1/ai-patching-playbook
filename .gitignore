@@ -1,3 +1,5 @@
 node_modules/
 *.log
 audit-*.txt
+__pycache__/
+*.py[cod]
