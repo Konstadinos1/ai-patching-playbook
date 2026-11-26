@@ -28,7 +28,7 @@ class AuditTests(unittest.TestCase):
         (self.app / 'package-lock.json').write_text('{}')
         for name in ('apt-get', 'apt-mark', 'systemctl', 'ss', 'docker'):
             self.stub(name, 'exit 0\n')
-        self.stub('npm', 'echo called >> "$NPM_CALLS"\n'
+        self.stub('npm', 'printf "%s\\n" "$@" >> "$NPM_CALLS"\n'
                   'printf "%s" "$AUDIT_JSON"\nexit "${AUDIT_RC:-0}"\n')
         self.env = dict(os.environ, PATH=f'{self.bin}:' + os.environ['PATH'],
                         NPM_CALLS=str(self.root / 'calls'), AUDIT_JSON=report())
@@ -68,11 +68,13 @@ class AuditTests(unittest.TestCase):
         self.assertNotIn('total=0', result.stdout)
 
     def test_invalid_and_incomplete_json_are_unknown(self):
-        for output in ('not json', '{}', '{"metadata":{"vulnerabilities":null}}'):
+        for output in ('not json', '{}', '{"metadata":[]}', '{"metadata":{"vulnerabilities":null}}'):
             with self.subTest(output=output):
                 self.env['AUDIT_JSON'] = output
                 result = self.run_audit('--app-root', str(self.app), '--network-scans')
                 self.assertEqual(result.returncode, 1)
+                self.assertIn('UNKNOWN: npm audit result unusable', result.stdout)
+                self.assertNotIn('Traceback', result.stdout + result.stderr)
                 self.assertNotIn('SCANNED: npm runtime', result.stdout)
 
     def test_unexpected_exit_status_is_unknown(self):
@@ -116,6 +118,23 @@ class AuditTests(unittest.TestCase):
         result = self.run_audit('--help')
         self.assertEqual(result.returncode, 0)
         self.assertIn('Usage:', result.stdout)
+
+    def test_info_only_finding_uses_explicit_exit_threshold(self):
+        output = json.loads(report())
+        output['metadata']['vulnerabilities'].update(info=1, total=1)
+        self.env.update(AUDIT_JSON=json.dumps(output), AUDIT_RC='1', npm_config_audit_level='critical')
+        result = self.run_audit('--app-root', str(self.app), '--network-scans')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('info=1', result.stdout)
+        self.assertEqual((self.root / 'calls').read_text().splitlines(),
+                         ['audit', '--json', '--omit=dev', '--audit-level=info'])
+
+    def test_status_one_with_zero_findings_is_unknown(self):
+        self.env['AUDIT_RC'] = '1'
+        result = self.run_audit('--app-root', str(self.app), '--network-scans')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('UNKNOWN: npm audit result unusable', result.stdout)
+        self.assertNotIn('SCANNED: npm runtime', result.stdout)
 
 
 if __name__ == '__main__':

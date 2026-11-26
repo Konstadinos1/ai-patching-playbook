@@ -21,6 +21,14 @@ An installed version is not proof the running process loaded it. Record scanner 
 |---|---|---|---|---|---|
 | Fill | Fill | Fill | Fill | Fill | Fill |
 
+For each proposed write, link the plan step and approval revision to the decision and observed effect. Use the request ID and backend receipt where the interface supplies them. For a human-run command, correlate the operator's timestamped command and exit status with an independent observation of the target. Include denied requests and disputed outcomes.
+
+| Step or request ID / approval ref | Operator or executor identity / policy revision | Decision and dispatch time | Command record or backend receipt / outcome | Independent observation and time | Unresolved discrepancy / owner |
+|---|---|---|---|---|---|
+| Fill | Fill | Fill | Fill | Fill | Fill |
+
+When the records cannot establish the effect, mark it unknown. Record any reconciliation before retrying. Keep sensitive diagnostics in the approved evidence store and use access-controlled references here.
+
 ## Health and observation
 
 | Check | Baseline | Observed after | PASS / FAIL / NOT RUN / UNKNOWN | Evidence |

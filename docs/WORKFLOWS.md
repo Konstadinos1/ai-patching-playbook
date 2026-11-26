@@ -51,7 +51,7 @@ Treat activation as an explicit part of the change, including installation-trigg
 
    `--no-deps` limits recreation but does not prove dependency compatibility. A single Compose service replacement usually interrupts traffic. Do not claim Compose automatically supplies a rolling update.
 
-7. Verify the running image ID/digest, stable process status, configured healthcheck where present, direct-origin/public endpoint, functional request, and workers. “Up” without a healthcheck is process state, not readiness.
+7. On the approved daemon, check the replacement container's image ID against the approved platform manifest's configuration digest. Record the platform and manifest digest alongside that result. Verify stable process status, the configured healthcheck where present, direct-origin/public endpoint, functional request, and workers. [Image identity and evidence](TECHNICAL.md)
 8. Observe before proceeding. Do not prune old images or volumes during the recovery window.
 
 **Recovery:** restore the previous manifest/config and immutable image, recreate the affected service, then verify. Restore state only through an approved consistency procedure. Never use `docker compose down -v` as patch cleanup.

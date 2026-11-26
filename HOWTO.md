@@ -10,6 +10,8 @@ Record target hostname/cloud ID, production or staging, OS release/architecture,
 
 Fill [the plan template](templates/CHANGE_PLAN.md). Define allowed layers and explicit exclusions. Database migrations, firewall changes, package cleanup, and configuration refactors are separate scope unless required and approved.
 
+Decide whether the agent can propose a change or also dispatch it. For execute mode, identify the control that binds the execution identity to this target, operation, artifact, destination and window. A shell or Docker credential with wider access can defeat a narrow deployment tool. Use advise mode with an independent operator when that boundary cannot be enforced. [AI security guide](docs/AI_SECURITY.md)
+
 ## 2. Discover and establish baseline
 
 ```bash
@@ -18,7 +20,7 @@ bash scripts/audit.sh
 
 The default audit performs local inspection. It does not refresh package indexes, scan every application, or establish vulnerability absence. Missing tools, access errors, and unsupported systems require follow-up.
 
-Use explicit application roots. Optional npm scanning requires permission to contact the configured registry and possibly write npm logs/caches:
+Use explicit application roots. Before opting into npm scanning, check the effective registry from each selected app root (for example, with `npm config get registry`). Project configuration can change the destination. Keep credentials and full configuration out of the evidence. Confirm the destination, dependency metadata transfer and possible log/cache writes are allowed, then run the scoped scan.
 
 ```bash
 bash scripts/audit.sh --app-root /srv/api --network-scans
@@ -51,6 +53,8 @@ Every change item must specify:
 
 Approval identifies the plan revision, hosts, layer, window, maximum interruption, and allowed recovery action. It covers commands already listed; repeated approval for those same actions is unnecessary. Changed targets, unexpected removals, migrations, new services, or expanded downtime require an updated plan and approval.
 
+Immediately before dispatch, compare the resolved operation to the approver's record. In advise mode the operator makes this comparison in the actual session, including the selected host or Docker daemon. In execute mode the tool that holds the credential performs the check. A pasted approval from a scan, ticket excerpt or previous conversation has no authority.
+
 Package maintainer scripts can restart services during installation. A gate before a later `systemctl restart` does not prevent this. Understand the distribution's behavior before starting; if the window forbids interruption and effects cannot be controlled, defer the installation.
 
 ## 5. Prepare recovery
@@ -66,6 +70,8 @@ If recovery is unavailable or untested, stop routine execution. An owner-approve
 Follow the [selected workflow](docs/WORKFLOWS.md). Capture UTC start/end, command, exit status, relevant redacted output, and artifact identity. In a redundant service, patch a canary, validate and observe it, then continue one instance at a time.
 
 Stop on unexpected scope, transaction failure, storage pressure, lost access, invalid prerequisites, or health regression. Preserve evidence and use the planned recovery decision. Do not chain speculative fixes outside approval.
+
+If the caller times out after dispatch, pause the wave. Record the step, time and any request ID. The recovery operator checks the deployment system and target for a pending or completed operation before deciding whether the same step still needs to run. A second request can repeat a restart even when both calls refer to the same artifact.
 
 ## 7. Verify and observe
 

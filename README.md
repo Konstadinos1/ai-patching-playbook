@@ -7,8 +7,8 @@ Targets Debian/Ubuntu hosts with systemd, Docker Compose, Node.js, and Python. O
 ## Start here
 
 1. Read [HOWTO](HOWTO.md), identify the service owner, and confirm recovery access.
-2. Run `bash scripts/audit.sh` as your normal account. Local inspection does not install packages or restart services. Access failures remain unknowns.
-3. Review and redact output before sharing. Optional dependency scans contact registries and can write caches; see [technical details](docs/TECHNICAL.md).
+2. Confirm the intended host and Docker endpoint, then run `bash scripts/audit.sh` as your normal account. The selected Docker daemon can be remote. Access failures remain unknowns.
+3. Review and redact output before sharing. Before an optional npm scan, check the effective registry in each app root and approve the destination, dependency metadata transfer and possible cache writes. [Technical details](docs/TECHNICAL.md)
 4. Fill the [change plan](templates/CHANGE_PLAN.md). Give the agent [PROMPT.md](PROMPT.md), the plan inputs, and the audit.
 5. Approve exact scope and side effects. Verify recovery prerequisites, execute one bounded batch, and compare workload health against baseline.
 6. Complete the [change report](templates/CHANGE_REPORT.md), including incomplete checks and deferred findings.
@@ -35,6 +35,8 @@ bash scripts/audit.sh --app-root /srv/api --network-scans
 | [Change report](templates/CHANGE_REPORT.md) | Before/after evidence, observed health, and deferred work |
 
 ## Operating modes
+
+Decide what authority the agent needs before connecting it to a host. The [AI security guide](docs/AI_SECURITY.md) follows an approved operation across the model, executor and target. The [assurance guide](docs/AGENT_ASSURANCE.md) shows how to evaluate that boundary and investigate disputed actions. Practice reading the evidence in the [offline patching exercises](exercises/README.md).
 
 **Advise:** the agent proposes commands; an operator executes them and returns output. Proposed commands are never reported as executed.
 
