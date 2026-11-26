@@ -14,6 +14,15 @@ Status: DRAFT — fill all required fields before approval. This template grants
 - Maintenance start/end and timezone; maximum interruption:
 - Agent/session dependency on target; independent recovery access:
 
+## Agent access and evidence handling
+
+- Who will dispatch each write (operator in advise mode, scoped executor in execute mode)?
+- Where does the approver record the decision? Who can change or revoke it?
+- Which execution identity, tool/policy revision and resource limits apply? Include any alternate shell, Docker or connector access.
+- Which host ID, Docker endpoint/project, registry destination and platform apply to this step?
+- Which inventory fields may go to the model/provider, registry and evidence store? Record redaction and access/retention limits for each applicable destination.
+- Who will reconcile a timeout, using which deployment history or operator command record and independent target observation?
+
 ## Evidence and prioritization
 
 | Finding ID | Component / installed version | Advisory or scanner evidence + timestamp | Applicability / exposure / KEV status | Fixed target | Priority / uncertainty |

@@ -4,14 +4,18 @@
 
 ```mermaid
 flowchart LR
-  O[Operator and approver] --> P[Approved versioned plan]
+  O[Approver] --> P[Approved versioned plan]
   H[Target local inventory] --> E[Redacted evidence]
   S[Vendor advisories and scanners] --> E
   E --> A[Agent analysis]
-  A --> P
-  P --> X[Restricted execution account]
-  X --> H
-  H --> V[Independent workload verification]
+  A --> Q[Proposed operation]
+  Q --> O
+  Q --> X[Operator or scoped executor]
+  P --> X
+  X --> T[Target workload]
+  T --> H
+  T --> V[Independent workload verification]
+  X --> R
   V --> R[Evidence report and owner review]
 ```
 
@@ -28,6 +32,8 @@ A defensible conclusion follows this chain:
 Record UTC collection time, target identity, collector/scanner version, advisory database timestamp, scope, command exit status, source URL or stored output reference, and redaction/coverage limits. Keep package counts, package vulnerabilities, and unique CVEs distinct. One package can have multiple advisories; one advisory can affect multiple packages.
 
 For distribution packages, use vendor security advisories and the full distribution package revision. Backported fixes can preserve an older upstream version. For containers, scan the selected platform and immutable digest; host scans do not cover application packages inside images. For apps, scan the actual resolved lock/environment and note excluded build/dev dependencies. A source manifest alone need not match the deployed artifact.
+
+The collector lists container image references and daemon images separately. A tag in one listing and a digest in the other do not establish which image a running container loaded. Record the container's image ID on the intended daemon and match it to the configuration digest of the approved platform manifest. For a multi-platform release, also retain the parent index digest and which platform manifest it selected. The registry manifest digest and the local image ID identify different objects.
 
 Use [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) only after validating the vulnerability identifier and applicability. Vendor release notes explain fix compatibility. Scanner databases and KEV evolve, so timestamp evidence and record unavailable sources.
 
@@ -48,14 +54,14 @@ Requires Bash. Local sections use installed `hostname`, `date`, `sed`, `uname`, 
 | Listeners | `ss -lntup` | Process ownership can be incomplete without privilege; no reachability proof |
 | Docker | Running containers; image digests/IDs/build timestamps | Daemon access failure is UNKNOWN; ages are informational, not vulnerability classifications |
 | App roots | Explicit top-level manifest presence only | No recursive search, no reading `.env`, no automatic Python environment discovery |
-| npm optional | `npm audit --json --omit=dev` in each supplied npm project | Runtime dependency metadata sent to configured registry; caches/logs may be written; lifecycle installs are not requested |
+| npm optional | `npm audit --json --omit=dev --audit-level=info` in each supplied npm project | The configured registry receives dependency metadata. The client can write caches and logs. |
 | Storage | Filesystem capacity and inodes for `/` and `/var` | Check `/boot`, artifact volumes, and application mounts separately if applicable |
 
 Default “local” means no external scanner or registry call is requested. Underlying clients and platform configuration may still interact with a remote Docker daemon or other configured endpoints. The script queries the selected Docker context; confirm it points to the intended target. It is not a guarantee of zero filesystem effects from every underlying client.
 
 ### npm parsing and errors
 
-The script captures the command exit status and parses structured JSON. It accepts status 0 or 1 only when the output has nonnegative integer severity counts and a consistent total; a status-0 report with findings is rejected. Presence of an error, invalid JSON, missing metadata, inconsistent counts, or another exit status becomes UNKNOWN. It does not parse human prose or silently replace failures with zeros.
+The script sets the npm failure threshold to `info` for this invocation. Other project or user thresholds could otherwise allow a zero exit status alongside lower-severity findings. With this setting, a valid report pairs status 0 with zero findings or status 1 with one or more findings. The collector checks that each severity count is a nonnegative integer and that the counts sum to the total. A registry error, malformed JSON, missing or invalid metadata, inconsistent counts, or a mismatched exit status yields `UNKNOWN`.
 
 A valid report with vulnerabilities is a completed scan, not a collector error. The script reports counts but does not retain full advisory records automatically; collect structured details separately with restricted permissions for actual planning. Unsupported npm output schemas require parser adaptation. A registry configured to suppress or limit advisories limits evidence even when JSON is valid.
 

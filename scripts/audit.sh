@@ -121,7 +121,7 @@ for root in "${app_roots[@]}"; do
   if ! command -v npm >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
     unknown 'npm audit requires npm and Python 3 for structured parsing'; continue
   fi
-  audit_output=$(cd -- "$root" && npm audit --json --omit=dev 2>&1); audit_rc=$?
+  audit_output=$(cd -- "$root" && npm audit --json --omit=dev --audit-level=info 2>&1); audit_rc=$?
   # Only accept the expected exit statuses AND a supported structured result.
   # Never coerce a registry failure, invalid JSON, or absent counts to zero.
   if ! printf '%s' "$audit_output" | python3 -c '
@@ -131,14 +131,20 @@ try:
     result = json.load(sys.stdin)
     if status not in (0, 1) or not isinstance(result, dict) or "error" in result:
         raise ValueError("command or registry error")
-    counts = result["metadata"]["vulnerabilities"]
+    metadata = result.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ValueError("missing or invalid metadata")
+    counts = metadata.get("vulnerabilities")
+    if not isinstance(counts, dict):
+        raise ValueError("missing or invalid severity mapping")
     keys = ("info", "low", "moderate", "high", "critical", "total")
     if not all(type(counts.get(k)) is int and counts[k] >= 0 for k in keys):
         raise ValueError("missing or invalid severity counts")
     if sum(counts[k] for k in keys[:-1]) != counts["total"]:
         raise ValueError("inconsistent severity counts")
-    if (status == 0 and counts["total"] != 0):
-        raise ValueError("inconsistent success status")
+    expected_status = 1 if counts["total"] > 0 else 0
+    if status != expected_status:
+        raise ValueError("exit status disagrees with findings at audit level info")
     print("SCANNED: npm runtime dependency findings: " + ", ".join(f"{k}={counts[k]}" for k in keys))
     print("Counts are package findings, not unique CVEs. Preserve detailed JSON separately.")
 except (ValueError, KeyError, TypeError) as exc:
